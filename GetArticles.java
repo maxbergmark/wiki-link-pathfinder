@@ -198,6 +198,10 @@ public class GetArticles {
 	public GetArticles() {
 		threadList = new ArrayList<>();
 		curr = this;
+		File directory = new File("data");
+		if (!directory.exists()){
+			directory.mkdir();
+		}
 		System.out.println("\nCompleted     Elapsed    Estimate   Message");
 		startTime = System.nanoTime();
 		getAllArticles();

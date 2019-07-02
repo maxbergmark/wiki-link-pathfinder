@@ -65,7 +65,7 @@ public class FetchThread implements Runnable {
 
 	private void saveData() {
 		GetArticles.mainPrint("Beginning save of thread " + process_id);
-		String fileName = "new_data/data_dump_" + process_id + ".txt";
+		String fileName = "data/data_dump_" + process_id + ".txt";
 		StringBuilder s = new StringBuilder();
 		for (int key : map.keySet()) {
 			s.append(String.format("%X\n", key));
