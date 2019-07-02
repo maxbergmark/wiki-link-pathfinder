@@ -1,0 +1,9 @@
+python3 only_articles.py //fetches all articles, approximate time 6-7h
+javac -cp json-simple-1.1.1.jar: .java //compile with classpath
+javac -cp json-simple-1.1.1.jar: Process.java //compile with classpath
+java -cp json-simple-1.1.1.jar: -Xmx8G Process //run with jar included
+
+//loading all files takes about 200 seconds.
+//typical searches take less than a second.
+//advanced searches can take 5-10 seconds.
+//complete searches can take over 20 seconds.
