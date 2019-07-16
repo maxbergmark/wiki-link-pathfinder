@@ -1,2 +1,5 @@
 *.class
 data/
+formatted_data/
+results/
+*.dat
