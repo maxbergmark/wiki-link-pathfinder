@@ -468,6 +468,7 @@ public class WikiSearcher {
 			MappedByteBuffer out = file.getChannel()
 				.map(FileChannel.MapMode.READ_ONLY, 0, 2_000_000_000);
 			total_articles = out.getInt();
+			System.out.println("articles: " + total_articles);
 			for (int i = 0; i < total_articles; i++) {
 				int article = out.getInt();
 				int numLinks = out.getInt();
