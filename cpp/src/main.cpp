@@ -47,18 +47,18 @@ bool verify(std::vector<int> &buffer, int level,
 	return true;
 }
 
-int search_data_recursive(int start, int goal, std::vector<int> &buffer, 
+void search_data_recursive(int start, int goal, std::vector<int> &buffer, 
 	int level, int max_level, std::vector<unsigned char> &search_mask,
-	const std::vector<std::vector<int>> &links) {
+	const std::vector<std::vector<int>> &links, long &count) {
 	buffer[level] = start;
 	search_mask[start] = std::min(search_mask[start], (unsigned char)level);
-	int count = 0;
+	int tmp_count = 0;
 	for (int i : links[start]) {
 		if (level + 1 == max_level && i == goal) {
 			#pragma omp critical
 			{
 				buffer[max_level] = goal;
-				count++;
+				tmp_count++;
 				printf("\r");
 				for (int j = 0; j < max_level; j++) {
 					printf("%d, ", buffer[j]);
@@ -67,20 +67,20 @@ int search_data_recursive(int start, int goal, std::vector<int> &buffer,
 			}
 		// } else if (level + 1 < max_level) {
 		} else if (level + 1 < max_level && level < search_mask[i]) {
-			count += search_data_recursive(i, goal, buffer, level+1, max_level,
-				search_mask, links);
+			search_data_recursive(i, goal, buffer, level+1, max_level,
+				search_mask, links, count);
 		} else {
-			// count++;
+			tmp_count++;
 		}
 	}
-	return count;
+	#pragma omp atomic
+		count += tmp_count;
 }
 
-inline int start_parallel_tasks(int start, int current, int goal, 
+void start_parallel_tasks(int start, int current, int goal, 
 	int level, int max_level, std::vector<unsigned char> &search_mask,
-	const std::vector<std::vector<int>> &links) {
+	const std::vector<std::vector<int>> &links, long &count) {
 
-	int count = 0;
 	for (unsigned long int k = 0; k < links[current].size(); k++) {
 		int i = links[current][k];
 		#pragma omp task default(none) \
@@ -96,58 +96,57 @@ inline int start_parallel_tasks(int start, int current, int goal,
 			buffer[level] = current;
 
 			if (level + 1 < max_level && level < search_mask[i]) {
-				int tmp = search_data_recursive(i, goal, buffer, 
-					level+1, max_level, search_mask, links);
-				#pragma omp atomic
-					count += tmp;
+				search_data_recursive(i, goal, buffer, 
+					level+1, max_level, search_mask, links, count);
+				// #pragma omp atomic
+					// count += tmp;
 			}
 		}
 	}
-	return count;
 }
 
 int search_data_recursive_parallel(int start, int current, int goal, 
 	int level, int max_level, std::vector<unsigned char> &search_mask,
-	const std::vector<std::vector<int>> &links) {
+	const std::vector<std::vector<int>> &links, long &count) {
 
 	search_mask[current] = std::min(search_mask[current], (unsigned char)level);
 	int c = 0;
-	int count = 0;
+	// int count = 0;
 	if (level == 0 && links[current].size() < 100 && max_level > 2) {
 		for (int i : links[current]) {
 			if (level == 0) {
 				printf("\r%d / %lu\t", ++c, links[current].size());
 				fflush(stdout);
 			}
-			count += search_data_recursive_parallel(start, i, goal, level+1, 
-				max_level, search_mask, links);
+			search_data_recursive_parallel(start, i, goal, level+1, 
+				max_level, search_mask, links, count);
 		}
 	} else {
-		#pragma omp parallel
-		{
-			#pragma omp single
-			{
-				count += start_parallel_tasks(start, current, goal, level, 
-					max_level, search_mask, links);
-			}
-			#pragma omp taskwait
-		}
+		start_parallel_tasks(start, current, goal, level, 
+			max_level, search_mask, links, count);
 	}
 	return count;
 }
 
-int find_all_paths(int start, int goal, int length, 
+long find_all_paths(int start, int goal, int length, 
 	std::vector<unsigned char> &search_mask,
 	const std::vector<std::vector<int>> &links) {
 
-	int paths;
+	long paths = 0;
 	if (length < 3) {
 		std::vector<int> buffer(length+1);
-		paths = search_data_recursive(start, goal, buffer, 
-			0, length, search_mask, links);
+		search_data_recursive(start, goal, buffer, 
+			0, length, search_mask, links, paths);
 	} else {
-		paths = search_data_recursive_parallel(start, start, goal, 
-			0, length, search_mask, links);
+		#pragma omp parallel
+		{
+			#pragma omp single nowait
+			{
+				search_data_recursive_parallel(start, start, goal, 
+					0, length, search_mask, links, paths);
+			}
+			#pragma omp taskwait
+		}
 	}
 	return paths;
 }
@@ -274,14 +273,14 @@ int main(int argc, char **argv) {
 	ts = get_wall_time();
 
 
-	int paths = find_all_paths(s, e, l, search_mask, links);
+	long paths = find_all_paths(s, e, l, search_mask, links);
 
 	end = clock();
 	te = get_wall_time();
 	elapsed_clock = ((double) (end - start)) / CLOCKS_PER_SEC;
 	elapsed_wall = te - ts;
-	printf("\relapsed (clock): %.3f seconds (%d)\n", elapsed_clock, paths);
-	printf("\relapsed  (wall): %.3f seconds (%d)\n", elapsed_wall, paths);
+	printf("\relapsed (clock): %.3f seconds (%ld)\n", elapsed_clock, paths);
+	printf("\relapsed  (wall): %.3f seconds (%ld)\n", elapsed_wall, paths);
 /*
 	start = clock();
 	std::fill(search_mask.begin(), search_mask.end(), 0xff);
