@@ -2,7 +2,7 @@ CC = g++
 SRC = $(wildcard src/*.cpp)
 OBJ = $(SRC:.cpp=.o)
 BIN = ./bin
-TARGET = mapreduce.out
+TARGET = wiki_search.out
 
 LDFLAGS = -lm -fopenmp
 CFLAGS = -I./include -g -O3 -Wall --std=c++11 -fopenmp
