@@ -1,7 +1,6 @@
 #include <boost/circular_buffer.hpp>
 #include <iostream>
 #include <fstream>
-// #include <ios>
 #include <vector>
 #include <algorithm>
 #include <time.h>
@@ -22,10 +21,10 @@ int reverse_bytes(int i) {
 }
 
 void print(std::vector<int> const &input) {
+	printf("\r");
 	for (unsigned long i = 0; i < input.size(); i++) {
-		std::cout << input.at(i) << ' ';
+		std::cout << input.at(i) << ((i+1 < input.size()) ? " -> " : "\n");
 	}
-	std::cout << std::endl;
 }
 
 bool verify(std::vector<int> &buffer, int level, 
@@ -40,7 +39,6 @@ bool verify(std::vector<int> &buffer, int level,
 			}
 		}
 		if (!found) {
-			// printf("couldn't find %d in %d's links\n", target, buffer[i]);
 			return false;
 		}
 	}
@@ -59,13 +57,8 @@ void search_data_recursive(int start, int goal, std::vector<int> &buffer,
 			{
 				buffer[max_level] = goal;
 				tmp_count++;
-				printf("\r");
-				for (int j = 0; j < max_level; j++) {
-					printf("%d, ", buffer[j]);
-				}
-				printf("%d (%d)\n", goal, verify(buffer, max_level, links));
+				print(buffer);
 			}
-		// } else if (level + 1 < max_level) {
 		} else if (level + 1 < max_level && level < search_mask[i]) {
 			search_data_recursive(i, goal, buffer, level+1, max_level,
 				search_mask, links, count);
@@ -98,8 +91,6 @@ void start_parallel_tasks(int start, int current, int goal,
 			if (level + 1 < max_level && level < search_mask[i]) {
 				search_data_recursive(i, goal, buffer, 
 					level+1, max_level, search_mask, links, count);
-				// #pragma omp atomic
-					// count += tmp;
 			}
 		}
 	}
@@ -111,7 +102,6 @@ int search_data_recursive_parallel(int start, int current, int goal,
 
 	search_mask[current] = std::min(search_mask[current], (unsigned char)level);
 	int c = 0;
-	// int count = 0;
 	if (level == 0 && links[current].size() < 100 && max_level > 2) {
 		for (int i : links[current]) {
 			if (level == 0) {
@@ -145,7 +135,7 @@ long find_all_paths(int start, int goal, int length,
 				search_data_recursive_parallel(start, start, goal, 
 					0, length, search_mask, links, paths);
 			}
-			#pragma omp taskwait
+			// #pragma omp taskwait
 		}
 	}
 	return paths;
@@ -154,7 +144,8 @@ long find_all_paths(int start, int goal, int length,
 
 
 int search_data(int start, int goal, 
-	boost::circular_buffer<int> &queue, const std::vector<std::vector<int>> &links,
+	boost::circular_buffer<int> &queue, 
+	const std::vector<std::vector<int>> &links,
 	std::vector<bool> &searched) {
 	
 	std::fill(searched.begin(), searched.end(), false);
@@ -220,7 +211,6 @@ void read_file(const char *filename, std::vector<std::vector<int>> &links) {
 		num_links = reverse_bytes(num_links);
 		std::vector<int> temp;
 		temp.reserve(num_links);
-		// printf("%d, %d\n", article_id, num_links);
 	
 		for (int i = 0; i < num_links; i += size) {
 			int temp_num = std::min(size, num_links - i);
@@ -281,24 +271,5 @@ int main(int argc, char **argv) {
 	elapsed_wall = te - ts;
 	printf("\relapsed (clock): %.3f seconds (%ld)\n", elapsed_clock, paths);
 	printf("\relapsed  (wall): %.3f seconds (%ld)\n", elapsed_wall, paths);
-/*
-	start = clock();
-	std::fill(search_mask.begin(), search_mask.end(), 0xff);
-	l = search_data(9239, 27703020, queue, links, searched);
-	// buffer[0] = 27703020;
-	paths = search_data_recursive(9239, 27703020, buffer, 0, l, search_mask, links);
-	end = clock();
-	elapsed = ((double) (end - start)) / CLOCKS_PER_SEC;
-	printf("elapsed: %.3f seconds (%d)\n", elapsed, paths);
-
-	start = clock();
-	std::fill(search_mask.begin(), search_mask.end(), 0xff);
-	l = search_data(27703020, 22149654, queue, links, searched);
-	// buffer[0] = 27703020;
-	paths = search_data_recursive(27703020, 22149654, buffer, 0, l, search_mask, links);
-	end = clock();
-	elapsed = ((double) (end - start)) / CLOCKS_PER_SEC;
-	printf("elapsed: %.3f seconds (%d)\n", elapsed, paths);
-*/
 	return 0;
 }
