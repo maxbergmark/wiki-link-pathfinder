@@ -1,4 +1,4 @@
-CC = g++
+CC = mpic++
 SRC = $(wildcard src/*.cpp)
 OBJ = $(SRC:.cpp=.o)
 BIN = ./bin

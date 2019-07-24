@@ -1,2 +1,2 @@
 javac -cp json-simple-1.1.1.jar: ReFormat.java
-java -cp json-simple-1.1.1.jar: ReFormat
+java -cp json-simple-1.1.1.jar: -Xmx8G ReFormat

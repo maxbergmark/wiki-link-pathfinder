@@ -6,6 +6,7 @@
 #include <time.h>
 #include <omp.h>
 #include <sys/time.h>
+#include <mpi.h>
 
 int reverse_bytes(int i) {
 	int j;
@@ -196,7 +197,8 @@ int search_data(int start, int goal,
 }
 
 
-void read_file(const char *filename, std::vector<std::vector<int>> &links) {
+void read_file(const char *filename, std::vector<std::vector<int>> &links,
+	int mpi_rank, int mpi_size) {
 	int size = 10000;
 	int num_articles, article_id, num_links;
 	std::vector<int> ret(size);
@@ -209,17 +211,24 @@ void read_file(const char *filename, std::vector<std::vector<int>> &links) {
 		in.read((char*)&num_links, sizeof(int));
 		article_id = reverse_bytes(article_id);
 		num_links = reverse_bytes(num_links);
-		std::vector<int> temp;
-		temp.reserve(num_links);
-	
-		for (int i = 0; i < num_links; i += size) {
-			int temp_num = std::min(size, num_links - i);
-			in.read((char*)&ret[0], temp_num * sizeof(int));
-			for (int j = 0; j < temp_num; j++) {
-				temp.push_back(reverse_bytes(ret[j]));
+		if (article_id % mpi_size == mpi_rank) {
+			std::vector<int> temp;
+			temp.reserve(num_links);
+
+			for (int i = 0; i < num_links; i += size) {
+				int temp_num = std::min(size, num_links - i);
+				in.read((char*)&ret[0], temp_num * sizeof(int));
+				for (int j = 0; j < temp_num; j++) {
+					temp.push_back(reverse_bytes(ret[j]));
+				}
 			}
+			links[article_id] = (const std::vector<int>)temp;
+		} else {
+			for (int i = 0; i < num_links; i += size) {
+				int temp_num = std::min(size, num_links - i);
+				in.read((char*)&ret[0], temp_num * sizeof(int));
+			}			
 		}
-		links[article_id] = (const std::vector<int>)temp;
 	}
 	in.close();
 }
@@ -239,9 +248,15 @@ int main(int argc, char **argv) {
 	std::vector<bool> searched(70000000);
 	std::vector<unsigned char> search_mask(70000000);
 	std::vector<int> buffer(10);
-	read_file(filename, links);
+	int size, rank;
+	MPI_Init(&argc, &argv);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
 
+	read_file(filename, links, rank, size);
+
+	return 0;
 	clock_t start, end;
 	double ts, te;
 	double elapsed_clock, elapsed_wall;
@@ -258,7 +273,7 @@ int main(int argc, char **argv) {
 	int e = 22149654;
 	printf("Branching: %lu\n", links[s].size());
 	l = search_data(s, e, queue, links, searched);
-	omp_set_num_threads(8);
+	omp_set_num_threads(2);
 	start = clock();
 	ts = get_wall_time();
 

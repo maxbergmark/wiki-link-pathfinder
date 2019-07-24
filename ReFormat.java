@@ -7,11 +7,11 @@ import java.nio.channels.FileChannel;
 public class ReFormat {
 
 	private int[][] m2;
-	private int max_number = 73000000;
+	private int max_number = 0;
 	private int numLines;
+	private int allCount = 0;
 
 	private ReFormat() {
-		m2 = new int[max_number][];
 	}
 
 	public void SaveFormatted() {
@@ -67,6 +67,7 @@ public class ReFormat {
 			MappedByteBuffer out = file.getChannel()
 				.map(FileChannel.MapMode.READ_WRITE, 0, 2_000_000_000);
 				out.putInt(0);
+				out.putInt(0);
 			for (int i = 0; i < numFiles; i++) {
 				System.out.print(String.format("\r%d / %d", i, numFiles));
 				try {
@@ -77,6 +78,10 @@ public class ReFormat {
 					while ((line = b.readLine()) != null) {
 						totalArticles++;
 						int article = Integer.parseInt(line, 16);
+						if (article == 61199280) {
+							System.out.println("FOUND THE ERROR");
+						}
+						max_number = Math.max(article, max_number);
 						line = b.readLine();
 						int numLinks = Integer.parseInt(line, 16);
 						out.putInt(article);
@@ -98,6 +103,8 @@ public class ReFormat {
 				}
 			}
 			out.putInt(0, totalArticles);
+			out.putInt(4, max_number);
+			System.out.println("\nmax_number: " + max_number);
 		} catch (FileNotFoundException e) {
 
 		} catch (IOException e) {
@@ -108,12 +115,13 @@ public class ReFormat {
 	private void removeExcess() {
 		int removed = 0;
 		int total = 0;
+		allCount = 2;
 		for (int i = 0; i < m2.length; i++) {
 			if (m2[i] != null) {
 				int count = 0;
 				total += m2[i].length;
 				for (int j : m2[i]) {
-					if (m2[j] != null) {
+					if (j < m2.length && m2[j] != null) {
 						count++;
 					} else {
 						removed++;
@@ -121,9 +129,11 @@ public class ReFormat {
 				}
 				int[] temp = new int[count];
 				count = 0;
+				allCount += 2;
 				for (int j : m2[i]) {
-					if (m2[j] != null) {
+					if (j < m2.length && m2[j] != null) {
 						temp[count++] = j;
+						allCount++;
 					}
 				}
 				m2[i] = temp;
@@ -136,6 +146,10 @@ public class ReFormat {
 			MappedByteBuffer out = file.getChannel()
 				.map(FileChannel.MapMode.READ_ONLY, 0, 2_000_000_000);
 			numLines = out.getInt();
+			max_number = out.getInt();
+			System.out.println("max_number: " + max_number);
+			m2 = new int[max_number+1][];
+
 			for (int i = 0; i < numLines; i++) {
 				int article = out.getInt();
 				int numLinks = out.getInt();
@@ -153,9 +167,10 @@ public class ReFormat {
 
 		try(RandomAccessFile file = new RandomAccessFile("memory_map_formatted.dat", "rw")) {
 			MappedByteBuffer out = file.getChannel()
-				.map(FileChannel.MapMode.READ_WRITE, 0, 2_000_000_000);
-			
+				.map(FileChannel.MapMode.READ_WRITE, 0, 4*allCount);
+			System.out.println("allCount: " + 4*allCount);
 			out.putInt(numLines);
+			out.putInt(max_number);
 			for (int i = 0; i < max_number; i++) {
 				if (m2[i] != null) {
 					out.putInt(i);
