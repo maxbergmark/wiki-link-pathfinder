@@ -48,7 +48,7 @@ public class WikiSearcher {
 	private int[][] complete_data;
 	// jesus = 1095706:
 	private int goal = 1095706; //2731583;// 
-	private int max_number = 73000000;
+	private int max_number;
 	private int total_articles;
 	private HashMap<Integer, Integer> searched;
 	private int max_branch = Integer.MAX_VALUE;
@@ -64,14 +64,13 @@ public class WikiSearcher {
 
 	public WikiSearcher() {
 
-		m2 = new int[max_number][];
-		searchMask = new int[max_number];
 		articles = new CircularQueue<Integer>(Integer.class, 1000000);
 		wikiAPI = new WikiAPIHandler();
 
 		System.out.println("\nData intitialized.\nReading files.");
 		long t0 = System.nanoTime();
 		readFiles3();
+		searchMask = new int[max_number + 1];
 		long t1 = System.nanoTime();
 		System.out.println(String.format(
 			"Files read in %.3f seconds", (t1-t0) * 1e-9));
@@ -468,6 +467,9 @@ public class WikiSearcher {
 			MappedByteBuffer out = file.getChannel()
 				.map(FileChannel.MapMode.READ_ONLY, 0, 2_000_000_000);
 			total_articles = out.getInt();
+			max_number = out.getInt();
+			System.out.println("max_number: " + max_number);
+			m2 = new int[max_number + 1][];
 			System.out.println("articles: " + total_articles);
 			for (int i = 0; i < total_articles; i++) {
 				int article = out.getInt();
