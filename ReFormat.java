@@ -6,12 +6,14 @@ import java.nio.channels.FileChannel;
 
 public class ReFormat {
 
-	private int[][] m2;
-	private int max_number = 73000000;
+	private int[][] links;
+	private int[][] backLinks;
+	private int max_number = 0;
 	private int numLines;
+	private long allCount = 0;
+	private long allBackCount = 0;
 
 	private ReFormat() {
-		m2 = new int[max_number][];
 	}
 
 	public void SaveFormatted() {
@@ -67,6 +69,7 @@ public class ReFormat {
 			MappedByteBuffer out = file.getChannel()
 				.map(FileChannel.MapMode.READ_WRITE, 0, 2_000_000_000);
 				out.putInt(0);
+				out.putInt(0);
 			for (int i = 0; i < numFiles; i++) {
 				System.out.print(String.format("\r%d / %d", i, numFiles));
 				try {
@@ -77,6 +80,10 @@ public class ReFormat {
 					while ((line = b.readLine()) != null) {
 						totalArticles++;
 						int article = Integer.parseInt(line, 16);
+						if (article == 61199280) {
+							System.out.println("FOUND THE ERROR");
+						}
+						max_number = Math.max(article, max_number);
 						line = b.readLine();
 						int numLinks = Integer.parseInt(line, 16);
 						out.putInt(article);
@@ -98,6 +105,8 @@ public class ReFormat {
 				}
 			}
 			out.putInt(0, totalArticles);
+			out.putInt(4, max_number);
+			System.out.println("\nmax_number: " + max_number);
 		} catch (FileNotFoundException e) {
 
 		} catch (IOException e) {
@@ -108,12 +117,13 @@ public class ReFormat {
 	private void removeExcess() {
 		int removed = 0;
 		int total = 0;
-		for (int i = 0; i < m2.length; i++) {
-			if (m2[i] != null) {
+		allCount = 2;
+		for (int i = 0; i < links.length; i++) {
+			if (links[i] != null) {
 				int count = 0;
-				total += m2[i].length;
-				for (int j : m2[i]) {
-					if (m2[j] != null) {
+				total += links[i].length;
+				for (int j : links[i]) {
+					if (j < links.length && links[j] != null) {
 						count++;
 					} else {
 						removed++;
@@ -121,12 +131,14 @@ public class ReFormat {
 				}
 				int[] temp = new int[count];
 				count = 0;
-				for (int j : m2[i]) {
-					if (m2[j] != null) {
+				allCount += 2;
+				for (int j : links[i]) {
+					if (j < links.length && links[j] != null) {
 						temp[count++] = j;
+						allCount++;
 					}
 				}
-				m2[i] = temp;
+				links[i] = temp;
 			}
 		}
 	}
@@ -136,12 +148,17 @@ public class ReFormat {
 			MappedByteBuffer out = file.getChannel()
 				.map(FileChannel.MapMode.READ_ONLY, 0, 2_000_000_000);
 			numLines = out.getInt();
+			max_number = out.getInt();
+			System.out.println("max_number: " + max_number);
+			links = new int[max_number+1][];
+			backLinks = new int[max_number+1][];
+
 			for (int i = 0; i < numLines; i++) {
 				int article = out.getInt();
 				int numLinks = out.getInt();
-				m2[article] = new int[numLinks];
+				links[article] = new int[numLinks];
 				for (int j = 0; j < numLinks; j++) {
-					m2[article][j] = out.getInt();
+					links[article][j] = out.getInt();
 				}
 			}
 		} catch (FileNotFoundException e) {
@@ -149,22 +166,87 @@ public class ReFormat {
 		}
 	}
 
+	private void generateBackLinks() {
+
+		int[] backLengths = new int[max_number+1];
+		for (int i = 0; i < links.length; i++) {
+			if (i % 1000 == 0) {
+				System.out.print("\ri: " + i);
+			}
+			if (links[i] != null) {			
+				for (int j : links[i]) {
+					backLengths[j]++;
+				}
+			}
+		}
+		for (int i = 0; i < links.length; i++) {
+			if (backLengths[i] > 0) {
+				backLinks[i] = new int[backLengths[i]];
+			}
+		}
+		System.out.println();
+
+		allBackCount = 2;
+		int[] backIndices = new int[max_number+1];
+		for (int i = 0; i < links.length; i++) {
+			if (i % 1000 == 0) {
+				System.out.print("\ri: " + i);
+			}
+			if (links[i] != null) {			
+				allBackCount += 2;
+				for (int j : links[i]) {
+					backLinks[j][backIndices[j]++] = i;
+					allBackCount++;
+				}
+			}
+		}
+		System.out.println();
+
+	}
+
 	private void saveFile() {
 
+		System.out.println("allCount: " + 4*allCount);
+		System.out.println("allBackCount: " + 4*allBackCount);
 		try(RandomAccessFile file = new RandomAccessFile("memory_map_formatted.dat", "rw")) {
+
 			MappedByteBuffer out = file.getChannel()
-				.map(FileChannel.MapMode.READ_WRITE, 0, 2_000_000_000);
-			
+				.map(FileChannel.MapMode.READ_WRITE, 0, 4*allCount);
+			System.out.println("allCount: " + 4*allCount);
 			out.putInt(numLines);
+			out.putInt(max_number);
 			for (int i = 0; i < max_number; i++) {
-				if (m2[i] != null) {
+				if (links[i] != null) {
 					out.putInt(i);
-					out.putInt(m2[i].length);
-					for (int j = 0; j < m2[i].length; j++) {
-						out.putInt(m2[i][j]);
+					out.putInt(links[i].length);
+					for (int j = 0; j < links[i].length; j++) {
+						out.putInt(links[i][j]);
 					}
 				}
 			}
+		} catch (FileNotFoundException e) {
+		} catch (IOException e) {
+		}
+
+		try(RandomAccessFile file = new RandomAccessFile("memory_map_backlinks.dat", "rw")) {
+			MappedByteBuffer out = file.getChannel()
+				.map(FileChannel.MapMode.READ_WRITE, 0, 4*allBackCount);
+			System.out.println("allBackCount: " + 4*allBackCount);
+			out.putInt(numLines);
+			out.putInt(max_number);
+			for (int i = 0; i < max_number; i++) {
+				if (backLinks[i] != null) {
+					out.putInt(i);
+					out.putInt(backLinks[i].length);
+					for (int j = 0; j < backLinks[i].length; j++) {
+						out.putInt(backLinks[i][j]);
+					}
+				}
+			}
+
+
+
+
 		} catch (FileNotFoundException e) {
 		} catch (IOException e) {
 		}
@@ -177,6 +259,7 @@ public class ReFormat {
 		f.saveMemoryMap();
 		f.readFiles3();
 		f.removeExcess();
+		f.generateBackLinks();
 		f.saveFile();
 
 	}
