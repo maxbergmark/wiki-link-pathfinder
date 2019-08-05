@@ -1,4 +1,4 @@
-*.class
+java/*.class
 data/
 formatted_data/
 results/

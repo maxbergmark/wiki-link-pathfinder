@@ -28,12 +28,12 @@ void print(long id, std::vector<int> const &input) {
 	}
 }
 
-inline bool valid_candidate(std::set<int> s) {
-	if (s.size() == 0) {
+inline bool valid_candidate(std::vector<int> &v) {
+	if (v.size() == 0) {
 		return false;
 	}
-	auto search = s.find(-1);
-    return search != s.end();
+	auto search = std::find(v.begin(), v.end(), -1);
+    return search != v.end();
 }
 
 bool verify(std::vector<int> &buffer, int level, 
@@ -54,10 +54,16 @@ bool verify(std::vector<int> &buffer, int level,
 	return true;
 }
 
+void insert(std::vector<int> &v, int i) {
+	if(std::find(v.begin(), v.end(), i) == v.end()) {
+		v.push_back(i);
+	}
+}
+
 void find_cached_paths(int start, int goal, std::vector<int> &buffer, 
 	int level, int max_level, std::vector<unsigned char> &search_mask,
 	const std::vector<std::vector<int>> &links, long &count,
-	std::vector<std::set<int>> &cache) {
+	std::vector<std::vector<int>> &cache) {
 
 	buffer[level] = start;
 
@@ -66,26 +72,18 @@ void find_cached_paths(int start, int goal, std::vector<int> &buffer,
 void search_data_recursive(int start, int goal, std::vector<int> &buffer, 
 	int level, int max_level, std::vector<unsigned char> &search_mask,
 	const std::vector<std::vector<int>> &links, long &count,
-	std::vector<std::set<int>> &cache) {
+	std::vector<std::vector<int>> &cache) {
 	buffer[level] = start;
 	search_mask[start] = std::min(search_mask[start], (unsigned char)level);
 	int tmp_count = 0;
 	for (int i : links[start]) {
-		// if (level + 1 == max_level && i == goal) {
 		if (level + 1 == max_level && valid_candidate(cache[i])) {
 			#pragma omp critical
 			{
 				buffer[max_level] = i;
-				// count++;
-				// print(count, buffer);
 				for (int j = 0; j < (int) buffer.size() - 1; j++) {
-					cache[buffer[j]].insert(buffer[j+1]);
+					insert(cache[buffer[j]], buffer[j+1]);
 				}
-				// for (int s : cache[i]) {
-					// printf("%d ", s);
-				// }
-				// printf("\n");
-				// cache[i]
 			}
 		} else if (level + 1 < max_level && level + 1 < search_mask[i]) {
 			search_data_recursive(i, goal, buffer, level+1, max_level,
@@ -94,9 +92,9 @@ void search_data_recursive(int start, int goal, std::vector<int> &buffer,
 			#pragma omp critical
 			{
 				for (int j = 0; j < level; j++) {
-					cache[buffer[j]].insert(buffer[j+1]);
+					insert(cache[buffer[j]], buffer[j+1]);
 				}
-				cache[start].insert(i);
+				insert(cache[start], i);
 			}
 		} else {
 			tmp_count++;
@@ -109,7 +107,7 @@ void search_data_recursive(int start, int goal, std::vector<int> &buffer,
 void start_parallel_tasks(int start, int current, int goal, 
 	int level, int max_level, std::vector<unsigned char> &search_mask,
 	const std::vector<std::vector<int>> &links, long &count,
-	std::vector<std::set<int>> &cache) {
+	std::vector<std::vector<int>> &cache) {
 
 	for (unsigned long int k = 0; k < links[current].size(); k++) {
 		int i = links[current][k];
@@ -132,9 +130,9 @@ void start_parallel_tasks(int start, int current, int goal,
 				#pragma omp critical
 				{
 					for (int j = 0; j < level; j++) {
-						cache[buffer[j]].insert(buffer[j+1]);
+						insert(cache[buffer[j]], buffer[j+1]);
 					}
-					cache[current].insert(i);
+					insert(cache[current], i);
 				}
 			}
 		}
@@ -144,7 +142,7 @@ void start_parallel_tasks(int start, int current, int goal,
 int search_data_recursive_parallel(int start, int current, int goal, 
 	int level, int max_level, std::vector<unsigned char> &search_mask,
 	const std::vector<std::vector<int>> &links, long &count,
-	std::vector<std::set<int>> &cache) {
+	std::vector<std::vector<int>> &cache) {
 
 	search_mask[current] = std::min(search_mask[current], (unsigned char)level);
 	int c = 0;
@@ -167,7 +165,7 @@ int search_data_recursive_parallel(int start, int current, int goal,
 long find_all_paths(int start, int goal, int length, 
 	std::vector<unsigned char> &search_mask,
 	const std::vector<std::vector<int>> &links,
-	std::vector<std::set<int>> &cache) {
+	std::vector<std::vector<int>> &cache) {
 
 	long paths = 0;
 	if (length < 3) {
@@ -192,7 +190,7 @@ long find_all_paths(int start, int goal, int length,
 int search_data(int start, int goal, 
 	boost::circular_buffer<int> &queue, 
 	const std::vector<std::vector<int>> &links,
-	std::vector<bool> &searched, std::vector<std::set<int>> &cache) {
+	std::vector<bool> &searched, std::vector<std::vector<int>> &cache) {
 	
 	queue.clear();
 
@@ -223,7 +221,6 @@ int search_data(int start, int goal,
 				searched[i] = true;
 			}
 
-			// if (i == goal) {
 			if (valid_candidate(cache[i])) {
 				found_goal = true;
 				break;
@@ -236,8 +233,6 @@ int search_data(int start, int goal,
 			curr_depth++;
 		}
 	}
-
-	// printf("length of path: %d (%d)\n", curr_depth + 1, counted);
 	return curr_depth + 1;
 }
 
@@ -263,13 +258,12 @@ article_count read_file(const char *filename,
 		in.read((char*)&num_links, sizeof(int));
 		article_id = reverse_bytes(article_id);
 		num_links = reverse_bytes(num_links);
-		std::vector<int> temp;
-		temp.reserve(num_links);
+		std::vector<int> temp(num_links);
 		for (int i = 0; i < num_links; i += size) {
 			int temp_num = std::min(size, num_links - i);
 			in.read((char*)&ret[0], temp_num * sizeof(int));
 			for (int j = 0; j < temp_num; j++) {
-				temp.push_back(reverse_bytes(ret[j]));
+				temp[i+j] = reverse_bytes(ret[j]);
 			}
 		}
 		links[article_id] = (const std::vector<int>)temp;
@@ -298,13 +292,12 @@ void read_back_links(const char *filename,
 		in.read((char*)&num_links, sizeof(int));
 		article_id = reverse_bytes(article_id);
 		num_links = reverse_bytes(num_links);
-		std::vector<int> temp;
-		temp.reserve(num_links);
+		std::vector<int> temp(num_links);
 		for (int i = 0; i < num_links; i += size) {
 			int temp_num = std::min(size, num_links - i);
 			in.read((char*)&ret[0], temp_num * sizeof(int));
 			for (int j = 0; j < temp_num; j++) {
-				temp.push_back(reverse_bytes(ret[j]));
+				temp[i+j] = reverse_bytes(ret[j]);
 			}
 		}
 		back_links[article_id] = (const std::vector<int>)temp;
@@ -318,12 +311,10 @@ double get_wall_time(){
 	if (gettimeofday(&time,NULL)){
 		return 0;
 	}
-	return (double)time.tv_sec + (double)time.tv_usec * .000001;
+	return (double)time.tv_sec + (double)time.tv_usec * 1e-6;
 }
 
-// 27703020 ->     4489 ->    85971 ->    92615 ->  4386742 -> 22149654
-
-void rebuild_paths(std::vector<std::set<int>> &cache, int start, int goal, 
+void rebuild_paths(std::vector<std::vector<int>> &cache, int start, int goal, 
 	int level, std::vector<int> &buffer, int &total) {
 		
 	buffer[level] = start;
@@ -334,7 +325,6 @@ void rebuild_paths(std::vector<std::set<int>> &cache, int start, int goal,
 	}
 	for (int i : cache[start]) {
 		if (i >= 0 && level + 1 < (int) buffer.size()) {
-			// printf("next iteration: %d -> %d\n", start, i);
 			rebuild_paths(cache, i, goal, level + 1, buffer, total);
 		}
 	}
@@ -342,41 +332,59 @@ void rebuild_paths(std::vector<std::set<int>> &cache, int start, int goal,
 
 void backwards_pass(int start, int goal, int level, int &max_level, 
 	std::vector<std::vector<int>> &back_links,
-	std::vector<std::set<int>> &cache) {
+	std::vector<std::vector<int>> &cache) {
 
 	if (level == max_level || start == goal) {
-		cache[goal].insert(-1);
+		insert(cache[goal], -1);
 		return;
 	}
 
 	if (level == 0 && back_links[goal].size() > 10000) {
-		// printf("links: %lu\n", back_links[goal].size());
-		for (int i : back_links[goal]) {
-			cache[i].insert(goal);
-			cache[i].insert(-1);
-		}
-		max_level = 1;
+		insert(cache[goal], -1);
+		max_level = std::min(max_level, 0);
 		return;
+	} else if (level == 0 && back_links[goal].size() > 1000) {
+		max_level = std::min(max_level, 1);
+	} else if (level == 0) {
+		int tot_links = 0;
+		for (int i : back_links[goal]) {
+			tot_links += back_links[i].size();
+		}
+		if (tot_links > 1000) {
+			// printf("setting max branch to 1\n");
+			max_level = std::min(max_level, 1);
+		} else {
+			int tot_further = 0;
+			for (int i : back_links[goal]) {
+				for (int j : back_links[i]) {
+					tot_further += back_links[j].size();
+				}
+			}
+			if (tot_further > 20000) {
+				// printf("setting max branch to 2: %d\n", tot_further);
+				max_level = std::min(max_level, 2);
+			}
+
+		}
 	}
 
 	for (int i : back_links[goal]) {
-		cache[i].insert(goal);
+		insert(cache[i], goal);
 		if (level + 1 == max_level) {
-			cache[i].insert(-1);
+			insert(cache[i], -1);
 		}
 		if (level + 1 < max_level) {
 			backwards_pass(start, i, level + 1, max_level, back_links, cache);
 		}
 	}
-	// return max_level;
 }
 
-void print_cache(std::vector<std::set<int>> &cache) {
+void print_cache(std::vector<std::vector<int>> &cache) {
 	for (int i = 0; i < (int)cache.size(); i++) {
-		std::set<int> ss = cache[i];
-		if (ss.size() > 0) {
+		std::vector<int> v = cache[i];
+		if (v.size() > 0) {
 			printf("\r%d: ", i);
-			for (int j : ss) {
+			for (int j : v) {
 				printf("%d ", j);
 			}
 			printf("\n");
@@ -384,32 +392,22 @@ void print_cache(std::vector<std::set<int>> &cache) {
 	}	
 }
 
-void reset_containers(std::vector<std::set<int>> &cache, 
+void reset_containers(std::vector<std::vector<int>> &cache, 
 	std::vector<bool> &searched, 
 	std::vector<unsigned char> &search_mask) {
 
 	std::fill(searched.begin(), searched.end(), false);
 	std::fill(search_mask.begin(), search_mask.end(), 0xff);
-	// int size = cache.size();
-	// cache.clear();
-	// cache.resize(size);
-	#pragma omp parallel for
+	#pragma omp parallel for schedule(static)
 	for (int i = 0; i < (int) cache.size(); i++) {
 		cache[i].clear();
 	}
-	// for (std::set<int> s : cache) {
-		// printf("analyzing set: %lu\n", s.size());
-		// if (s.size() > 0) {
-			// printf("size too large\n");
-		// }
-	// }
-	// printf("size of set %d: %lu\n", 9239, cache[9239].size());
 }
 
-void perform_search(int s, int e, boost::circular_buffer<int> &queue,
+float perform_search(int s, int e, boost::circular_buffer<int> &queue,
 	std::vector<std::vector<int>> &links,
 	std::vector<std::vector<int>> &back_links,
-	std::vector<std::set<int>> &cache,
+	std::vector<std::vector<int>> &cache,
 	std::vector<bool> &searched,
 	std::vector<unsigned char> &search_mask
 
@@ -428,9 +426,10 @@ void perform_search(int s, int e, boost::circular_buffer<int> &queue,
 	backwards_pass(s, e, 0, backpass_level, back_links, cache);
 	te = get_wall_time();
 	double backpass_time = te - ts;
-	// print_cache(cache);
+
 	if (valid_candidate(cache[s])) {
-		printf("found solution with the backpass: %.3f ms\n", backpass_time * 1e3);
+		// printf("found solution with the backpass: %.3f ms\n", 
+			// backpass_time * 1e3);
 		l = 0;
 		bfs_wall = 0;
 		elapsed_wall = 0;
@@ -462,7 +461,9 @@ void perform_search(int s, int e, boost::circular_buffer<int> &queue,
 	reset_time = te - ts;
 
 	tote = get_wall_time();
-	total_wall_time = tote - tots;		
+	total_wall_time = tote - tots;
+
+	double without_reset = total_wall_time - reset_time;
 
 	printf("\rcontainer reset time: %.3f ms\n", reset_time * 1e3);
 	printf("\rbackpass time: %.3f ms\n", backpass_time * 1e3);
@@ -472,8 +473,11 @@ void perform_search(int s, int e, boost::circular_buffer<int> &queue,
 	printf("\relapsed (clock): %.3f ms (%ld)\n", elapsed_clock * 1e3, paths);
 	printf("\relapsed  (wall): %.3f ms (%ld)\n", elapsed_wall * 1e3, paths);
 	printf("\rrebuild paths: %.3f ms\n", path_rebuild_wall * 1e3);
-	printf("\rtotal elapsed  (wall): %.3f ms\n\n", total_wall_time * 1e3);
-
+	printf("\rtotal elapsed (wall): %.3f ms\n", total_wall_time * 1e3);
+	printf("max branch: %d\n", backpass_level);
+	printf("\rtotal search time (wall): %.3f ms (%d)\n\n", without_reset * 1e3, 
+		l + backpass_level);
+	return without_reset;
 }
 
 struct search_pair {
@@ -487,7 +491,7 @@ int main(int argc, char **argv) {
 	boost::circular_buffer<int> queue(4000000);
 	std::vector<std::vector<int>> links;
 	std::vector<std::vector<int>> back_links;
-	std::vector<std::set<int>> cache;
+	std::vector<std::vector<int>> cache;
 	std::vector<bool> searched;
 	std::vector<unsigned char> search_mask;
 	omp_set_num_threads(8);
@@ -503,20 +507,88 @@ int main(int argc, char **argv) {
 	reset_containers(cache, searched, search_mask);
 	te = get_wall_time();
 	double file_read_wall = te - ts;
-	printf("\rfile read: %.3f seconds (%d / %d)\n", 
+	printf("\rfile read: %.3f seconds (%d / %d)\n\n", 
 		file_read_wall, counts.articles, counts.max_article_id);
 	std::vector<search_pair> searches;
 	searches.push_back({1095706, 9239}); // jesus -> europe (2)
 	searches.push_back({9239, 27703020}); // europe -> sean banan (3)
 	searches.push_back({27703020, 22149654}); // sean banan -> sean whyte (5)	
 	searches.push_back({22461, 2146249}); // osteoporosis -> danger zone (5)
+
+	searches.push_back({33183, 1241259});
+	searches.push_back({3407579, 1323115});
+	searches.push_back({3412648, 13279542});
+	searches.push_back({342908, 14308434});
+	searches.push_back({343764, 14532});
+	searches.push_back({36452845, 145584});
+	searches.push_back({37211502, 15039565});
+	searches.push_back({385155, 15043});
+	searches.push_back({39362298, 154247});
+	searches.push_back({402866, 15704166});
+	searches.push_back({42197484, 169611});
+	searches.push_back({423750, 177541});
+	searches.push_back({435836, 177543});
+	searches.push_back({435846, 178182});
+	searches.push_back({4455173, 18361730});
+	searches.push_back({465626, 18539});
+	searches.push_back({48392, 18855594});
+	searches.push_back({508173, 189285});
+	searches.push_back({5450573, 19058});
+	searches.push_back({557228, 19344654});
+	searches.push_back({557246, 19874811});
+	searches.push_back({56283, 199464});
+	searches.push_back({594204, 200055});
+	searches.push_back({595323, 2146249});
+	searches.push_back({601485, 215176});
+	searches.push_back({60297506, 22108533});
+	searches.push_back({60687106, 22210872});
+	searches.push_back({6245059, 2227228});
+	searches.push_back({6365212, 22289914});
+	searches.push_back({6429, 22385461});
+	searches.push_back({650007, 22461});
+	searches.push_back({663200, 23254});
+	searches.push_back({6868, 23300});
+	searches.push_back({69088, 23538754});
+	searches.push_back({708662, 23796687});
+	searches.push_back({716982, 238839});
+	searches.push_back({7218866, 2402376});
+	searches.push_back({73298, 24075829});
+	searches.push_back({74748, 24151411});
+	searches.push_back({7498063, 24297671});
+	searches.push_back({77178, 25254564});
+	searches.push_back({78255, 25987});
+	searches.push_back({8135890, 266344});
+	searches.push_back({85432, 28189});
+	searches.push_back({857218, 28235});
+	searches.push_back({867419, 28236});
+	searches.push_back({895033, 28237});
+	searches.push_back({898471, 28238});
+	searches.push_back({904, 28239});
+	searches.push_back({923416, 28240});
+	searches.push_back({923502, 285729});
+	searches.push_back({9316, 2965});
+	searches.push_back({9317, 2966458});
+	searches.push_back({94028, 302017});
+	searches.push_back({9491, 30304});
+	searches.push_back({967725, 31780});
+	searches.push_back({9792, 328618});
+
 	if (argc == 3) {
 		searches.push_back({atoi(argv[1]), atoi(argv[2])});
 	}
+	float min_t = 1e3;
+	float max_t = 0;
+	float avg_t = 0;
 	for (search_pair p : searches) {
-		perform_search(p.start, p.end, queue, links, 
+		float t = perform_search(p.start, p.end, queue, links, 
 			back_links, cache, searched, search_mask);		
+		max_t = std::max(max_t, t);
+		min_t = std::min(min_t, t);
+		avg_t += t / searches.size();
 	}
+
+	printf("average: %.3fms\nmaximum: %.3fms\nminimum: %.3fms", 
+		avg_t * 1e3, max_t * 1e3, min_t * 1e3);
 
 	return 0;
 }
