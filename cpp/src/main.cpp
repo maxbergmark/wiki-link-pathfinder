@@ -32,8 +32,7 @@ inline bool valid_candidate(std::vector<int> &v) {
 	if (v.size() == 0) {
 		return false;
 	}
-	auto search = std::find(v.begin(), v.end(), -1);
-    return search != v.end();
+	return v[v.size() - 1] == -1;
 }
 
 bool verify(std::vector<int> &buffer, int level, 
@@ -58,15 +57,6 @@ void insert(std::vector<int> &v, int i) {
 	if(std::find(v.begin(), v.end(), i) == v.end()) {
 		v.push_back(i);
 	}
-}
-
-void find_cached_paths(int start, int goal, std::vector<int> &buffer, 
-	int level, int max_level, std::vector<unsigned char> &search_mask,
-	const std::vector<std::vector<int>> &links, long &count,
-	std::vector<std::vector<int>> &cache) {
-
-	buffer[level] = start;
-
 }
 
 void search_data_recursive(int start, int goal, std::vector<int> &buffer, 
@@ -400,7 +390,9 @@ void reset_containers(std::vector<std::vector<int>> &cache,
 	std::fill(search_mask.begin(), search_mask.end(), 0xff);
 	#pragma omp parallel for schedule(static)
 	for (int i = 0; i < (int) cache.size(); i++) {
-		cache[i].clear();
+		if (cache[i].size() > 0) {
+			cache[i].clear();
+		}
 	}
 }
 
@@ -426,6 +418,7 @@ float perform_search(int s, int e, boost::circular_buffer<int> &queue,
 	backwards_pass(s, e, 0, backpass_level, back_links, cache);
 	te = get_wall_time();
 	double backpass_time = te - ts;
+	// print_cache(cache);
 
 	if (valid_candidate(cache[s])) {
 		// printf("found solution with the backpass: %.3f ms\n", 
@@ -486,8 +479,9 @@ struct search_pair {
 };
 
 int main(int argc, char **argv) {
-	const char *filename = "../memory_map_formatted.dat";
-	const char *back_filename = "../memory_map_backlinks.dat";
+	const char *filename = "../memory_mapped_files/memory_map_formatted.dat";
+	const char *back_filename = "../memory_mapped_files/"
+		"memory_map_backlinks.dat";
 	boost::circular_buffer<int> queue(4000000);
 	std::vector<std::vector<int>> links;
 	std::vector<std::vector<int>> back_links;

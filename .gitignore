@@ -1,5 +1,6 @@
 java/*.class
 data/
 formatted_data/
+memory_mapped_files/
 results/
 *.dat

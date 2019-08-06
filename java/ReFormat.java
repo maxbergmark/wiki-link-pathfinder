@@ -16,7 +16,7 @@ public class ReFormat {
 	private ReFormat() {
 	}
 
-	public void SaveFormatted() {
+	public void saveFormatted() {
 		int count = 0;
 		int files = 0;
 		StringBuilder s = new StringBuilder();
