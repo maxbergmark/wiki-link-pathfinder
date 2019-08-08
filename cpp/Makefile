@@ -5,7 +5,7 @@ BIN = ./bin
 TARGET = wiki_search.out
 
 LDFLAGS = -lm -fopenmp
-CFLAGS = -I./include -g -O3 -Wall --std=c++11 -fopenmp
+CFLAGS = -I./include -c -fPIC -g -O3 -Wall --std=c++11 -fopenmp
 
 all: dir $(BIN)/$(TARGET)
 

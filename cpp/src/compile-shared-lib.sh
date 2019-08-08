@@ -1,0 +1,1 @@
+g++ -I../include -O3 -fopenmp -shared -Wl,-soname,wiki_searcher -o wiki_searcher.so -fPIC wiki_searcher.cpp
