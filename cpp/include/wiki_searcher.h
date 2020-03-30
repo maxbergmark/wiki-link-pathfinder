@@ -20,6 +20,7 @@ private:
 	int num_articles;
 	int max_article_id;
 	int maximum_length;
+	int backpass_ends;
 	std::vector<int> buffer; 
 	std::vector<unsigned char> search_mask;
 	std::vector<std::vector<int>> links;
@@ -27,6 +28,8 @@ private:
 	std::vector<std::vector<int>> cache;
 	boost::circular_buffer<int> queue;
 	std::vector<bool> searched;
+	std::vector<int> link_limit_counter;
+
 
 	inline bool valid_candidate(std::vector<int> &v);
 	bool verify(std::vector<int> &buffer, int level);
@@ -50,6 +53,7 @@ private:
 	void reset_containers();
 
 public:
+	int last_path_length;
 	std::string perform_search(int s, int e);
 	void read_files(const char *filename, const char *back_filename);
 	void read_files();

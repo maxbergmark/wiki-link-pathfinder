@@ -29,8 +29,8 @@ inline bool WikiSearcher::valid_candidate(std::vector<int> &v) {
 	if (v.size() == 0) {
 		return false;
 	}
-	return std::find(v.begin(), v.end(), -1) != v.end();
-	// return v[v.size() - 1] == -1;
+	// return std::find(v.begin(), v.end(), -1) != v.end();
+	return v[v.size() - 1] == -1;
 }
 
 bool WikiSearcher::verify(std::vector<int> &buffer, int level) {
@@ -51,11 +51,14 @@ bool WikiSearcher::verify(std::vector<int> &buffer, int level) {
 }
 
 void WikiSearcher::cache_insert(int idx, int i) {
-	// if(cache[idx].size() > 0 && cache[idx][cache[idx].size() - 1] == -1) {
-		// return;
-	// }
 	if(std::find(cache[idx].begin(), cache[idx].end(), i) == cache[idx].end()) {
-		cache[idx].push_back(i);
+		if(cache[idx].size() > 0 && cache[idx][cache[idx].size() - 1] == -1) {
+			cache[idx][cache[idx].size() - 1] = i;
+			cache[idx].push_back(-1);
+			return;
+		} else {
+			cache[idx].push_back(i);
+		}
 	}
 }
 
@@ -175,7 +178,8 @@ int WikiSearcher::search_data(int start, int goal) {
 	bool found_goal = false;
 	int curr_depth = 0;
 	int counted = 0;
-	std::vector<int> link_counter(100);
+	int n = 100;
+	std::vector<int> link_counter(n);
 	link_counter[curr_depth]++;
 
 	while (true) {
@@ -208,6 +212,9 @@ int WikiSearcher::search_data(int start, int goal) {
 		}
 		if (link_counter[curr_depth] == 0) {
 			curr_depth++;
+			if (curr_depth >= n) {
+				throw "Current depth exceeded vector";
+			}
 		}
 	}
 	return curr_depth + 1;
@@ -313,6 +320,96 @@ void WikiSearcher::backwards_pass(int start, int goal,
 		cache_insert(goal, -1);
 		return;
 	}
+	int limit = 15000;
+	if (level == 0) {
+
+		queue.clear();
+		backpass_ends = 0;
+		queue.push_back(goal);
+		bool found_goal = false;
+		int curr_depth = 0;
+		int counted = 0;
+		int n = 100;
+		std::vector<int> link_counter(n);
+		link_limit_counter.resize(n);
+		std::fill(link_limit_counter.begin(), link_limit_counter.end(), 0);
+		link_counter[curr_depth]++;
+
+		while (true) {
+			if (queue.empty()) {
+				// printf("queue empty: %d\n", curr_depth);
+				std::fill(searched.begin(), searched.end(), false);
+				return;
+			}
+
+			int art = queue.front();
+			queue.pop_front();
+			link_counter[curr_depth]--;
+
+			counted += back_links[art].size();
+			link_limit_counter[curr_depth] += back_links[art].size();
+			if (counted > limit) {
+				int tmp = 0;
+				while (link_counter[curr_depth] > 0) {
+					art = queue.front();
+					queue.pop_front();
+					tmp += back_links[art].size();
+					link_limit_counter[curr_depth] += back_links[art].size();
+					link_counter[curr_depth]--;
+				}
+				if (tmp > limit) {
+					curr_depth--;
+				}
+				break;
+			}
+			for (int i : back_links[art]) {
+				if (!searched[i]) {
+					if (!found_goal) {
+						queue.push_back(i);
+						link_counter[curr_depth+1]++;
+					}
+					searched[i] = true;
+				}
+
+				if (i == start) {
+					found_goal = true;
+					break;
+				}
+			}
+			if (found_goal) {
+				break;
+			}
+			if (link_counter[curr_depth] == 0) {
+				curr_depth++;
+				if (curr_depth >= n) {
+					throw "Current depth exceeded vector";
+				}
+			}
+		}
+		max_level = curr_depth + 1;
+		std::fill(searched.begin(), searched.end(), false);
+	}
+
+	for (int i : back_links[goal]) {
+		cache_insert(i, goal);
+		if (level + 1 < max_level) {
+			backwards_pass(start, i, level + 1, max_level, valid);
+		} else {
+			valid = true;
+			backpass_ends++;
+			cache_insert(i, -1);
+		}
+	}
+}
+/*
+void WikiSearcher::backwards_pass_2(int start, int goal, 
+	int level, int &max_level, bool &valid) {
+
+	if (level == max_level || start == goal) {
+		valid = true;
+		cache_insert(goal, -1);
+		return;
+	}
 	int f = 5;
 	if (level == 0 && (int)back_links[goal].size() > 10000*f) {
 		valid = true;
@@ -352,7 +449,7 @@ void WikiSearcher::backwards_pass(int start, int goal,
 		}
 	}
 }
-
+*/
 void WikiSearcher::print_cache() {
 	for (int i = 0; i < (int)cache.size(); i++) {
 		std::vector<int> v = cache[i];
@@ -383,11 +480,13 @@ std::string WikiSearcher::perform_search(int s, int e) {
 	if (links[s].size() == 0 || back_links[e].size() == 0) {
 		std::string error_string = "{\"error\":404,"
 			"\"message\":\"articles_do_not_have_links\"}";
+			last_path_length = -1;
 		return error_string;
 	}
 	if (s == e) {
 		std::string same_start_end = "{\"paths\":[" + std::to_string(s) 
 			+ "],\"num_paths\":1,\"elapsed_time\":0,\"clicks\":0}";
+			last_path_length = -1;
 		return same_start_end;
 
 	}
@@ -410,6 +509,7 @@ std::string WikiSearcher::perform_search(int s, int e) {
 			"\"elapsed_time\":" + std::to_string(bfs_wall)
 			+ "\"clicks\":-1}";
 		printf("no valid backpass found\n");
+		last_path_length = -1;
 		return no_paths_string;
 	}
 	// return "debug";
@@ -436,6 +536,7 @@ std::string WikiSearcher::perform_search(int s, int e) {
 				printf("No path found: %.3fms / %.3fms\n", 
 					bfs_wall * 1e3, backpass_time * 1e3);
 			}
+			last_path_length = -1;
 			return no_paths_string;
 		}
 		if (l + backpass_level > maximum_length) {
@@ -472,9 +573,14 @@ std::string WikiSearcher::perform_search(int s, int e) {
 	paths_string.pop_back();
 	paths_string += ",\"elapsed_time\":" + std::to_string(without_reset)
 		+",\"clicks\":" + std::to_string(l) + "}";
+	last_path_length = l + backpass_level;
 
 	if (DEBUG || without_reset > 1) {
-		printf("\rpath from %d -> %d\n", s, e);
+		printf("\rends: %d\n", backpass_ends);
+		for (int i = 0; i < 20; i++) {
+			printf("%d ,", link_limit_counter[i]);
+		}
+		printf("\n\rpath from %d -> %d\n", s, e);
 		printf("\rcontainer reset time: %.3f ms\n", reset_time * 1e3);
 		printf("\rbackpass time: %.3f ms (%d)\n", 
 			backpass_time * 1e3, backpass_level);
